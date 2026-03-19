@@ -76,7 +76,7 @@ def aoa_sim_1_sat_loc(date, path, sat_id, t_start, t_stop, t_step, gs_lat=+40.07
     for satellite in satellites:
         name = satellite.name
         if name == sat_id:
-            _, t_list, dopp, az, el, range_, sat_loc = calc_doppler_satloc(satellite, gs, t_start, t_stop, 1/t_step)
+            _, t_list, dopp, az, el, range_, sat_loc = calc_doppler_satloc_fast(satellite, gs, t_start, t_stop, 1/t_step)
             return t_list, az, el, range_, sat_loc, dopp
 
 def calc_doppler_satloc(sat, gs, start_time, stop_time, fs, fc=11.325e9, min_ele=60):
@@ -115,6 +115,58 @@ def calc_doppler_satloc(sat, gs, start_time, stop_time, fs, fc=11.325e9, min_ele
         
     t_list = n_list/fs
     is_visible = sat_ele_max > min_ele
+
+    return is_visible, t_list, doppler_shift, azimuth, elevation, range_, sat_loc
+
+
+def calc_doppler_satloc_fast(sat, gs, start_time, stop_time, fs, fc=11.325e9, min_ele=60):
+    # a faster version of calc_doppler_satloc rewritten by chatgpt
+    c = 299792458
+    ts = load.timescale()
+
+    duration_s = (stop_time - start_time).total_seconds()
+    n_samples = int(fs * duration_s) + 1
+    t_list = np.arange(n_samples) / fs
+
+    # Build vectorized Skyfield time object
+    t = ts.utc(
+        start_time.year,
+        start_time.month,
+        start_time.day,
+        start_time.hour,
+        start_time.minute,
+        start_time.second + start_time.microsecond / 1e6 + t_list
+    )
+
+    # Relative geometry for all times at once
+    dist = (sat - gs).at(t)
+
+    alt, az, distance = dist.altaz()
+    _, _, the_range, _, _, range_rate = dist.frame_latlon_and_rates(gs)
+
+    # Doppler
+    doppler_shift = -fc * range_rate.km_per_s * 1000 / c
+
+    elevation = alt.degrees
+    azimuth = az.degrees
+    range_ = the_range.m
+
+    # Mask low elevation
+    doppler_shift = doppler_shift.astype(float)
+    doppler_shift[elevation < (min_ele - 10)] = np.nan
+
+    sat_ele_max = np.max(elevation)
+    is_visible = sat_ele_max > min_ele
+
+    # Satellite ECI position for all times
+    sat_eci = sat.at(t).position.m.T   # shape: (N, 3)
+
+    # Convert ECI -> ECEF
+    # If possible, rewrite eci_to_ecef_pos to accept arrays.
+    sat_loc = np.empty_like(sat_eci)
+    current_dt = start_time
+    for i in range(n_samples):
+        sat_loc[i] = eci_to_ecef_pos(sat_eci[i], start_time + timedelta(seconds=t_list[i]), 'm')
 
     return is_visible, t_list, doppler_shift, azimuth, elevation, range_, sat_loc
 
