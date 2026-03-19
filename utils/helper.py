@@ -354,3 +354,20 @@ def lla_to_ecef(lat, lon, alt):
     
     # Return as 3x1 vector
     return np.array([x, y, z])
+
+def AoA_orientation_compensation(az, el, yaw, pitch, roll):
+    '''
+    az, el in radians. yaw, pitch, roll in degrees.'''
+    R_yaw = np.array([[np.cos(np.deg2rad(-yaw)), -np.sin(np.deg2rad(-yaw)), 0], [np.sin(np.deg2rad(-yaw)), np.cos(np.deg2rad(-yaw)), 0], [0, 0, 1]])
+    R_pitch = np.array([[np.cos(np.deg2rad(pitch)), 0, np.sin(np.deg2rad(pitch))], [0, 1, 0], [-np.sin(np.deg2rad(pitch)), 0, np.cos(np.deg2rad(pitch))]])
+    R_roll = np.array([[1, 0, 0], [0, np.cos(np.deg2rad(roll)), -np.sin(np.deg2rad(roll))], [0, np.sin(np.deg2rad(roll)), np.cos(np.deg2rad(roll))]])
+    R = R_yaw @ R_pitch @ R_roll
+    x = np.cos(az)*np.cos(el)
+    y = np.sin(az)*np.cos(el)
+    z = np.sin(el)
+    v_local = np.array([x, y, z]).T
+    v_global = np.dot(R, v_local.T).T
+    az = np.arctan2(v_global[:,1], v_global[:,0])
+    az = np.mod(az, 2*np.pi)
+    el = np.arcsin(v_global[:,2])
+    return az, el
