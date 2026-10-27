@@ -41,4 +41,4 @@ Then use notebook for analysis and plotting:
 - Generated outputs are written to `results/`.
 
 ## Contact
-Code author: Jida Zhang (email: jidaz [at] stanford.edu)
+Code author: Jida Zhang (email: jidaz [at] stanford.edu), Ishani Janveja (email: janveja2 [at] illinois.edu)
